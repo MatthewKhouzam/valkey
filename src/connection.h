@@ -70,6 +70,7 @@ typedef enum {
     CONN_TYPE_UNIX,
     CONN_TYPE_TLS,
     CONN_TYPE_RDMA,
+    CONN_TYPE_SHMEM,
     CONN_TYPE_MAX,
 } ConnectionTypeId;
 
@@ -83,6 +84,8 @@ static inline const char *getConnectionTypeName(int type) {
         return "tls";
     case CONN_TYPE_RDMA:
         return "rdma";
+    case CONN_TYPE_SHMEM:
+        return "shmem";
     default:
         return "invalid type";
     }

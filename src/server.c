@@ -3158,6 +3158,15 @@ void initListeners(void) {
         listener->priv = &server.rdma_ctx_config;
     }
 
+    if (server.shmem_socket != NULL) {
+        ct = connectionByType(CONN_TYPE_SHMEM);
+        if (!ct) serverPanic("Failed finding connection listener of %s", getConnectionTypeName(CONN_TYPE_SHMEM));
+        listener = &server.listeners[CONN_TYPE_SHMEM];
+        listener->bindaddr = &server.shmem_socket;
+        listener->bindaddr_count = 1;
+        listener->ct = ct;
+    }
+
     /* create all the configured listener, and add handler to start to accept */
     int listen_fds = 0;
     for (int j = 0; j < CONN_TYPE_MAX; j++) {

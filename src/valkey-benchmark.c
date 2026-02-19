@@ -61,6 +61,7 @@
 #include "hdr_histogram.h"
 #include "cli_common.h"
 #include "mt19937-64.h"
+#include "shmem_client.h"
 
 #define UNUSED(V) ((void)V)
 #define RANDPTR_INITIAL_SIZE 8
@@ -156,6 +157,7 @@ static struct config {
     pthread_mutex_t liveclients_mutex;
     pthread_mutex_t is_updating_slots_mutex;
     int resp3; /* use RESP3 */
+    const char *shmem_name; /* shared memory segment name, or NULL */
     int rps;
     atomic_uint_fast64_t last_time_ns;
     uint64_t time_per_token;
@@ -303,11 +305,17 @@ static valkeyContext *getValkeyContext(enum valkeyConnectionType ct, const char 
     valkeyContext *ctx = NULL;
     valkeyReply *reply = NULL;
     struct timeval tv = {0};
-    ctx = valkeyConnectWrapper(ct, ip_or_path, port, tv, 0, config.mptcp);
+    if (config.shmem_name) {
+        ctx = shmemConnect(config.shmem_name, 0);
+    } else {
+        ctx = valkeyConnectWrapper(ct, ip_or_path, port, tv, 0, config.mptcp);
+    }
     if (ctx == NULL || ctx->err) {
         fprintf(stderr, "Could not connect to server at ");
         char *err = (ctx != NULL ? ctx->errstr : "");
-        if (ct != VALKEY_CONN_UNIX)
+        if (config.shmem_name)
+            fprintf(stderr, "shmem:%s: %s\n", config.shmem_name, err);
+        else if (ct != VALKEY_CONN_UNIX)
             fprintf(stderr, "%s:%d: %s\n", ip_or_path, port, err);
         else
             fprintf(stderr, "%s: %s\n", ip_or_path, err);
@@ -945,13 +953,20 @@ static client createClient(char *cmd, int len, int seqlen, client from, int thre
         c->cluster_node = node;
     }
 
-    c->context = valkeyConnectWrapper(config.ct, ip, port, tv, 1, config.mptcp);
-    if (c->context->err) {
+    if (config.shmem_name) {
+        c->context = shmemConnect(config.shmem_name, 1);
+    } else {
+        c->context = valkeyConnectWrapper(config.ct, ip, port, tv, 1, config.mptcp);
+    }
+    if (c->context == NULL || c->context->err) {
         fprintf(stderr, "Could not connect to server at ");
-        if (config.ct != VALKEY_CONN_UNIX || is_cluster_client)
-            fprintf(stderr, "%s:%d: %s\n", ip, port, c->context->errstr);
+        char *err = (c->context != NULL ? c->context->errstr : "");
+        if (config.shmem_name)
+            fprintf(stderr, "shmem:%s: %s\n", config.shmem_name, err);
+        else if (config.ct != VALKEY_CONN_UNIX || is_cluster_client)
+            fprintf(stderr, "%s:%d: %s\n", ip, port, err);
         else
-            fprintf(stderr, "%s: %s\n", ip, c->context->errstr);
+            fprintf(stderr, "%s: %s\n", ip, err);
         exit(1);
     }
     if (config.tls == 1) {
@@ -1827,6 +1842,9 @@ int parseOptions(int argc, char **argv) {
             }
             config.ct = VALKEY_CONN_RDMA;
 #endif
+        } else if (!strcmp(argv[i], "--shmem")) {
+            if (lastarg) goto invalid;
+            config.shmem_name = argv[++i];
         } else if (!strcmp(argv[i], "--fuzz")) {
             config.fuzz_mode = 1;
         } else if (!strcmp(argv[i], "--fuzz-loglevel")) {
@@ -2006,6 +2024,7 @@ usage:
         tls_usage,
         rdma_usage,
         " --mptcp            Enable an MPTCP connection.\n"
+        " --shmem <name>     Connect via POSIX shared memory segment (e.g. /valkey_shmem_test).\n"
         " --fuzz             Enable fuzzy mode to generate random commands. WARNING: Recommended for testing only, not for use with production data.\n"
         " --fuzz-mode <modes> Set fuzzing modes (comma-separated): malformed-commands, config-commands.\n"
         "                    malformed-commands: Generates also malformed commands.\n"
@@ -2175,6 +2194,7 @@ int main(int argc, char **argv) {
 
     memset(&config.sslconfig, 0, sizeof(config.sslconfig));
     config.ct = VALKEY_CONN_TCP;
+    config.shmem_name = NULL;
     config.numclients = 50;
     config.requests = -1;
     config.duration = -1;

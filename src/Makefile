@@ -534,6 +534,7 @@ ENGINE_SERVER_OBJ = \
     setproctitle.o \
     sha1.o \
     sha256.o \
+    shmem.o \
     siphash.o \
     socket.o \
     sort.o \
@@ -607,6 +608,7 @@ ENGINE_BENCHMARK_OBJ = \
     strl.o \
     util.o \
     valkey-benchmark.o \
+    shmem_client.o \
     zmalloc.o
 ENGINE_CHECK_RDB_NAME=$(ENGINE_NAME)-check-rdb$(PROG_SUFFIX)
 ENGINE_CHECK_AOF_NAME=$(ENGINE_NAME)-check-aof$(PROG_SUFFIX)
