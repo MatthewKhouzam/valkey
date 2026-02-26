@@ -449,7 +449,8 @@ ENGINE_TRACE_OBJ = \
     trace/trace_commands.o \
     trace/trace_db.o \
     trace/trace_rdb.o \
-    trace/trace_server.o
+    trace/trace_server.o \
+    trace/trace_shmem.o
 ENGINE_SERVER_OBJ = \
     acl.o \
     adlist.o \

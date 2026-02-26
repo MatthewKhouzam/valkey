@@ -40,6 +40,7 @@ LTTNG_UST_TRACEPOINT_ENUM(
         lttng_ust_field_enum_value("UNIX", 1)
         lttng_ust_field_enum_value("TLS", 2)
         lttng_ust_field_enum_value("RDMA", 3)
+        lttng_ust_field_enum_value("SHMEM", 4)
     )
 )
 

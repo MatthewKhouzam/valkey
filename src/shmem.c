@@ -10,6 +10,7 @@
 #include "server.h"
 #include "connection.h"
 #include "anet.h"
+#include "trace/trace.h"
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -121,6 +122,7 @@ static connection *connShmemCreate(void) {
 
 static void connShmemClose(connection *conn_) {
     shmemConnection *sc = (shmemConnection *)conn_;
+    valkey_shmem_trace(valkey_shmem, close, sc->shm_name ? sc->shm_name : "");
     if (sc->shared) {
         sc->my_tx->closed = 1;
         munmap(sc->shared, sizeof(shmemShared));
@@ -184,12 +186,18 @@ err:
 
 static int connShmemAccept(connection *conn_, ConnectionCallbackFunc accept_handler) {
     shmemConnection *sc = (shmemConnection *)conn_;
+#ifdef USE_LTTNG
+    ustime_t start = ustime();
+#endif
     if (shmemSetupServer(sc) == C_ERR) {
         conn_->state = CONN_STATE_ERROR;
         if (accept_handler) accept_handler(conn_);
         return C_ERR;
     }
     conn_->state = CONN_STATE_CONNECTED;
+#ifdef USE_LTTNG
+    valkey_shmem_trace(valkey_shmem, accept, sc->shm_name, (uint64_t)(ustime() - start));
+#endif
     if (accept_handler) accept_handler(conn_);
     return C_OK;
 }
@@ -198,7 +206,10 @@ static int connShmemWrite(connection *conn_, const void *data, size_t len) {
     shmemConnection *sc = (shmemConnection *)conn_;
     if (!sc->shared || sc->my_tx->closed) return -1;
     size_t written = ring_write(sc->my_tx, data, len);
-    if (written > 0) shmemNudge(conn_->fd);
+    if (written > 0) {
+        shmemNudge(conn_->fd);
+        valkey_shmem_trace(valkey_shmem, write, sc->shm_name ? sc->shm_name : "", (uint64_t)written);
+    }
     return written > 0 ? (int)written : -1;
 }
 
@@ -207,6 +218,8 @@ static int connShmemRead(connection *conn_, void *buf, size_t len) {
     if (!sc->shared) return -1;
     if (sc->my_rx->closed && ring_available(sc->my_rx) == 0) return 0;
     size_t nread = ring_read(sc->my_rx, buf, len);
+    if (nread > 0)
+        valkey_shmem_trace(valkey_shmem, read, sc->shm_name ? sc->shm_name : "", (uint64_t)nread);
     return (int)nread;
 }
 

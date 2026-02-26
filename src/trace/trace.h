@@ -23,6 +23,7 @@
 #include "trace_db.h"
 #include "trace_rdb.h"
 #include "trace_commands.h"
+#include "trace_shmem.h"
 
 #ifdef USE_LTTNG
 #include <lttng/ust-fork.h>
