@@ -231,7 +231,14 @@ static long long activeExpireCycleJob(enum activeExpiryType jobType, int cycleTy
         /* Don't start a fast cycle if the previous cycle did not exit
          * for time limit, unless the percentage of estimated stale keys is
          * too high. */
-        if (!state->timelimit_exit && *expired_stale_perc[jobType] < config_cycle_acceptable_stale) return 0;
+        if (!state->timelimit_exit && *expired_stale_perc[jobType] < config_cycle_acceptable_stale) {
+            if (jobType == KEYS) {
+                latencyTraceEnd(db, expire_cycle_keys, 0);
+            } else if (jobType == FIELDS) {
+                latencyTraceEnd(db, expire_cycle_fields, 0);
+            }
+            return 0;
+        }
     }
 
     /* We usually should test CRON_DBS_PER_CALL per iteration, with
